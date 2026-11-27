@@ -273,11 +273,6 @@ export default function App() {
     });
   }
 
-  function viewAll() {
-    setFilter("all");
-    setSearch("");
-  }
-
   const today = todayString();
 
   let shown = tasks;
@@ -344,7 +339,6 @@ export default function App() {
           <div className="panel-head">
             <h2 className="panel-title" id="tasks-heading">Your Tasks</h2>
             <div className="panel-tools">
-              <button className="link-button" onClick={viewAll}>View all →</button>
               <button className="btn-primary with-icon" onClick={() => setShowAdd(true)}>
                 <IconPlus /> Add task
               </button>
