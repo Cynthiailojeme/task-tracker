@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import "./App.css";
 
 /* ---------- Small inline icons ---------- */
@@ -59,7 +59,37 @@ const IconTrash = () => (
   </Svg>
 );
 
+const IconPlus = () => (
+  <Svg size={18} stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+    <path d="M12 5v14M5 12h14" />
+  </Svg>
+);
+
+const IconChevron = () => (
+  <Svg size={18} stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="chevron">
+    <path d="M6 9l6 6 6-6" />
+  </Svg>
+);
+
+const IconCheck = () => (
+  <Svg size={18} stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </Svg>
+);
+
+const IconClose = () => (
+  <Svg size={20} stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M6 6l12 12M18 6L6 18" />
+  </Svg>
+);
+
 /* ---------- Helpers ---------- */
+
+const PRIORITY_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
 
 function todayString() {
   const d = new Date();
@@ -79,6 +109,92 @@ function isOverdue(t, today) {
   return !t.done && !!t.due_date && String(t.due_date).slice(0, 10) < today;
 }
 
+/* ---------- Custom select ---------- */
+
+function Select({ value, onChange, options, label }) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const ref = useRef(null);
+  const current = options.find((o) => o.value === value) || options[0];
+
+  useEffect(() => {
+    function onDocClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  function openList() {
+    setActive(Math.max(0, options.findIndex((o) => o.value === value)));
+    setOpen(true);
+  }
+
+  function choose(i) {
+    onChange(options[i].value);
+    setOpen(false);
+  }
+
+  function onKeyDown(e) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!open) openList();
+      else setActive((i) => Math.min(i + 1, options.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!open) openList();
+      else setActive((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (!open) openList();
+      else choose(active);
+    } else if (e.key === "Escape" && open) {
+      e.stopPropagation();
+      setOpen(false);
+    } else if (e.key === "Tab") {
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div className={"select" + (open ? " is-open" : "")} ref={ref}>
+      <button
+        type="button"
+        className="select-trigger"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => (open ? setOpen(false) : openList())}
+        onKeyDown={onKeyDown}
+      >
+        <span className={"pdot " + current.value} />
+        <span className="select-text">{current.label}</span>
+        <IconChevron />
+      </button>
+      {open && (
+        <ul className="select-menu" role="listbox" aria-label={label}>
+          {options.map((o, i) => (
+            <li
+              key={o.value}
+              role="option"
+              aria-selected={o.value === value}
+              className={"select-option" + (i === active ? " is-active" : "")}
+              onMouseEnter={() => setActive(i)}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => choose(i)}
+            >
+              <span className={"pdot " + o.value} />
+              <span className="select-text">{o.label}</span>
+              {o.value === value && <IconCheck />}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /* ---------- App ---------- */
 
 export default function App() {
@@ -90,12 +206,22 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
 
   useEffect(() => {
     fetch("/api/tasks")
       .then((res) => res.json())
       .then((data) => setTasks(data));
   }, []);
+
+  useEffect(() => {
+    if (!showAdd) return;
+    function onKey(e) {
+      if (e.key === "Escape") setShowAdd(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showAdd]);
 
   function addTask(e) {
     e.preventDefault();
@@ -111,6 +237,7 @@ export default function App() {
         setTitle("");
         setPriority("medium");
         setDueDate("");
+        setShowAdd(false);
       });
   }
 
@@ -179,16 +306,6 @@ export default function App() {
           <h1 className="app-title">Task Tracker</h1>
           <p className="app-subtitle">Stay on top of your work, every day.</p>
         </div>
-        <label className="search">
-          <IconSearch />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tasks..."
-            aria-label="Search tasks"
-          />
-        </label>
       </header>
 
       <section className="summary" aria-label="Task summary">
@@ -226,37 +343,15 @@ export default function App() {
         <section className="panel" aria-labelledby="tasks-heading">
           <div className="panel-head">
             <h2 className="panel-title" id="tasks-heading">Your Tasks</h2>
-            <button className="link-button" onClick={viewAll}>View all →</button>
+            <div className="panel-tools">
+              <button className="link-button" onClick={viewAll}>View all →</button>
+              <button className="btn-primary with-icon" onClick={() => setShowAdd(true)}>
+                <IconPlus /> Add task
+              </button>
+            </div>
           </div>
 
-          <form className="add-form" onSubmit={addTask}>
-            <input
-              className="field title-field"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Add a new task"
-              aria-label="Task title"
-            />
-            <select
-              className="field"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              aria-label="Priority"
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-            <input
-              className="field"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              aria-label="Due date"
-            />
-            <button className="btn-primary" type="submit">Add</button>
-          </form>
-
+          <div className="toolbar">
           <div className="filters" role="group" aria-label="Filter tasks">
             {["all", "active", "done"].map((f) => (
               <button
@@ -268,6 +363,17 @@ export default function App() {
                 {f === "all" ? "All" : f === "active" ? "Active" : "Done"}
               </button>
             ))}
+          </div>
+          <label className="search">
+            <IconSearch />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tasks..."
+              aria-label="Search tasks"
+            />
+          </label>
           </div>
 
           <div className="table-wrap">
@@ -380,6 +486,51 @@ export default function App() {
           </ul>
         </aside>
       </div>
+
+      {showAdd && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowAdd(false);
+          }}
+        >
+          <form className="modal" role="dialog" aria-modal="true" aria-labelledby="add-heading" onSubmit={addTask}>
+            <div className="modal-head">
+              <h2 className="panel-title" id="add-heading">New task</h2>
+              <button type="button" className="icon-button" onClick={() => setShowAdd(false)} aria-label="Close">
+                <IconClose />
+              </button>
+            </div>
+
+            <label className="form-group">
+              <span className="form-label">Task</span>
+              <input
+                className="field"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="What needs doing?"
+                autoFocus
+              />
+            </label>
+
+            <div className="form-grid">
+              <div className="form-group">
+                <span className="form-label">Priority</span>
+                <Select value={priority} onChange={setPriority} options={PRIORITY_OPTIONS} label="Priority" />
+              </div>
+              <label className="form-group">
+                <span className="form-label">Due date</span>
+                <input className="field" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              </label>
+            </div>
+
+            <div className="modal-actions">
+              <button type="button" className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
+              <button type="submit" className="btn-primary" disabled={!title.trim()}>Add task</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
